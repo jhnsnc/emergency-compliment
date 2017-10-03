@@ -7,19 +7,29 @@ const path = require('path');
 http.createServer((req, res) => {
   console.log('request', req.url);
 
-  if (req.method === 'GET') {
-    if (req.url.indexOf('/css') === 0 || req.url.indexOf('/js') === 0 || req.url.indexOf('/image') === 0) {
-      serveFile(`./public${req.url}`, req, res);
-    } else {
-      sendCompliment(req, res);
-    }
-  } else if (req.method === 'POST') {
-    // TODO: watch for incoming post request to add new compliment
-    res.writeHead(404, { 'Content-Type': 'text/html' });
-    res.end('The requested file could not be found.', 'utf-8');
-  } else {
-    res.writeHead(404, { 'Content-Type': 'text/html' });
-    res.end('The requested file could not be found.', 'utf-8');
+  switch (req.method) {
+    case 'GET':
+      if (req.url.indexOf('/css') === 0 || req.url.indexOf('/js') === 0 || req.url.indexOf('/image') === 0) {
+        serveFile(`./public${req.url}`, req, res);
+      } else if (req.url.indexOf('/add') === 0 && req.url.substring(1).indexOf('/') === -1) {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(generateAddComplimentPageHtml(), 'utf-8');
+      } else {
+        sendCompliment(req, res);
+      }
+      break;
+    case 'POST':
+      if (req.url === '/') {
+        addCompliment(req, res);
+      } else {
+        res.writeHead(404, { 'Content-Type': 'text/html' });
+        res.end('The requested file could not be found.', 'utf-8');
+      }
+      break;
+    default:
+      res.writeHead(404, { 'Content-Type': 'text/html' });
+      res.end('The requested file could not be found.', 'utf-8');
+      break;
   }
 }).listen(8000, () => {
   console.log('Server now listening on port 8000.');
@@ -103,10 +113,10 @@ function sendCompliment(req, res) {
   } else {
     responseMessage = compliments[Math.floor(Math.random() * compliments.length)];
   }
-  res.end(generatePageHtml(responseMessage, colorClasses[Math.floor(Math.random() * colorClasses.length)]), 'utf-8');
+  res.end(generateMainPageHtml(responseMessage, colorClasses[Math.floor(Math.random() * colorClasses.length)]), 'utf-8');
 }
 
-function generatePageHtml(message, colorClass) {
+function generateMainPageHtml(message, colorClass) {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -119,4 +129,49 @@ function generatePageHtml(message, colorClass) {
   <h1>${message}</h1>
 </body>
 </html>`;
+}
+
+function generateAddComplimentPageHtml() {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Emergency Compliments</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/7.0.0/normalize.min.css" rel="stylesheet">
+  <link href="/css/main.css" rel="stylesheet">
+</head>
+<body>
+  <h2>Add a New Compliment:</h2>
+  <form action="/" method="POST">
+    <label for="new-compliment-text">New compliment</label>
+    <input name="new-compliment-text" id="new-compliment-text" type="text" />
+    <input type="submit" value="submit" />
+  </form>
+</body>
+</html>`;
+}
+
+function addCompliment(req, res) {
+  let bodyData = '';
+  req.on('data', function (dataChunk) {
+    bodyData += dataChunk;
+  });
+  req.on('end', function () {
+    console.log('Response body ready', bodyData);
+    const urlEncDataVars = bodyData.split('&');
+    let newCompliment;
+    urlEncDataVars.forEach(urlEncVar => {
+      const splitVar = urlEncVar.split('=');
+      if (splitVar[0] === 'new-compliment-text') {
+        newCompliment = splitVar[1];
+      }
+    });
+
+    newCompliment = newCompliment.replace(/\+/g, ' ');
+
+    compliments.push(newCompliment);
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(`Uploaded successfully: \"${newCompliment}\". <a href=\"/\">Return to homepage</a>.`, 'utf-8');
+  });
+
 }
